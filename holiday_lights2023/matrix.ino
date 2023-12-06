@@ -8,10 +8,10 @@ int XY(int x, int y) {
    * @param y the y coordinate
    * @return the proper array index
   **/
-  return y*COLS + x;
+  return y * COLS + x;
 }
 
-int XY_canvas(int x, int y) {
+int XY_canvas(int x, int y, bool reversed) {
   /**
    * Maps the correct cartesian coordinate to the LED string canvas. Accounts for padding.
    * 
@@ -21,13 +21,12 @@ int XY_canvas(int x, int y) {
   **/
   int i;
   int j = XY(x, y);
-  int q = (j/COLS)*PADDING;
-
-  if (y&1) {
-    int rX = COLS - 1 - x;
-    i = y * COLS + rX + q;
-  } else {
+  int q = (j / COLS) * PADDING;
+  if ( (reversed && (y & 1)) || (!reversed && !(y & 1)) ) {
     i = j + q;
+  } else {
+    int rX = COLS - 1 - x;  
+    i = y * COLS + rX + q;
   }
   return i;
 }
@@ -45,13 +44,13 @@ void loadImage(struct CRGB *leds_dest, const unsigned char *img) {
   **/
   int source_index = 0;
   int dest_index = 0;
-  for (int j=0; j<ROWS; j++) {
-    for (int i=0; i<COLS; i++) {
-      source_index = 3*XY(i,j);
-      dest_index = XY_canvas(i,j);
-      leds_dest[ XY_canvas(i,j) ].r = pgm_read_word_near(img + source_index);
-      leds_dest[ XY_canvas(i,j) ].g = pgm_read_word_near(img + source_index + 1);
-      leds_dest[ XY_canvas(i,j) ].b = pgm_read_word_near(img + source_index + 2);
+  for (int j = 0; j < ROWS; j++) {
+    for (int i = 0; i < COLS; i++) {
+      source_index = 3 * XY(i, j);
+      dest_index = XY_canvas(i, j);
+      leds_dest[XY_canvas(i, j)].r = pgm_read_word_near(img + source_index);
+      leds_dest[XY_canvas(i, j)].g = pgm_read_word_near(img + source_index + 1);
+      leds_dest[XY_canvas(i, j)].b = pgm_read_word_near(img + source_index + 2);
     }
   }
 }
@@ -75,31 +74,33 @@ void loadColor(struct CRGB *leds_dest, struct CRGB color) {
   }
 }
 
-void scrollImage(struct CRGB *led_dest, const unsigned char *img1, const unsigned char *img2, unsigned int d) {
+void scrollImage(struct CRGB *led_dest, const unsigned char *img1, const unsigned char *img2, unsigned int duration) {
   /**
    * Horizontally scrolls from first input image to second input image and displays it on canvas. Both loads and outputs to canvas.
+   * Scolling effect lasts as long as specified duration.
+   * img1 --> img2
    * 
    * @param leds_dest the canvas destination to load a color onto
    * @param img1 first image, stored in program memory
    * @param img2 second image, stored in program memroy
+   * @param duration how long it takes to scroll through image in ms
    * @return None
   **/
   int source_index = 0;
   int dest_index = 0;
   int k = 0;
-  while (k < COLS+1) {
-    FastLED.clear();
+  while (k < COLS + 1) {
     for (int j = 0; j < ROWS; j++) {
-      for (int i = k; i < COLS-k; i++) {
+      for (int i = 0; i < COLS - k; i++) {
         dest_index = XY_canvas(i, j);
-        source_index = 3*XY(i+k, j);
+        source_index = 3 * XY(i + k, j);
         led_dest[dest_index].r = pgm_read_word_near(img1 + source_index);
         led_dest[dest_index].g = pgm_read_word_near(img1 + source_index + 1);
         led_dest[dest_index].b = pgm_read_word_near(img1 + source_index + 2);
       }
-      for (int i = COLS-k; i < COLS; i++) {
+      for (int i = COLS - k; i < COLS; i++) {
         dest_index = XY_canvas(i, j);
-        source_index = 3*XY(i-COLS+k, j);
+        source_index = 3 * XY(i - COLS + k, j);
         led_dest[dest_index].r = pgm_read_word_near(img2 + source_index);
         led_dest[dest_index].g = pgm_read_word_near(img2 + source_index + 1);
         led_dest[dest_index].b = pgm_read_word_near(img2 + source_index + 2);
@@ -107,7 +108,23 @@ void scrollImage(struct CRGB *led_dest, const unsigned char *img1, const unsigne
     }
     FastLED.show();
     k++;
-    delay(d);
+    delay((unsigned int)(duration/COLS));
+  }
+}
+
+void scrollImageSequence(struct CRGB *leds_dest, const unsigned char *sequence[], size_t length, unsigned int duration) {
+  /**
+   * Scrolls through entire image sequence. 
+   * Scrolling effect lasts as long as specified duration.
+   * 
+   * @param leds_dest the canvas destination to load leds onto
+   * @param sequence array of pointers to images
+   * @param length length of the sequence array
+   * @param duration how long it takes to scroll through in ms
+   * @return None
+  **/
+  for (int i = 0; i < length-1; i++) {
+    scrollImage(leds_dest, sequence[i], sequence[i+1], (unsigned int)(duration/length));
   }
 }
 
